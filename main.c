@@ -17,6 +17,7 @@
 /***** Includes *****/
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 #include "mxc_device.h"
 #include "mxc_delay.h"
 #include "gpio.h"
@@ -72,31 +73,53 @@ int setup_i2c(uint8_t *i2c_addr_list);
 */
 int setup_magnetic_sensors(mlx90393_t *sensors, uint8_t *i2c_addr_list, int num_sensors);
 
+/**
+ * @brief Takes a single reading from one magnetic sensor and converts it to uT
+ * @param   sensor Pointer to the magnetic sensor driver handle. (mlx90393_t *)
+ * @param   x Pointer to store the x-axis reading in microteslas. (float *)
+ * @param   y Pointer to store the y-axis reading in microteslas. (float *)
+ * @param   z Pointer to store the z-axis reading in microteslas. (float *)
+ * @return  int 0 if successful, error code otherwise
+*/
+int read_magnetic_sensor(mlx90393_t *sensor, float *x, float *y, float *z);
+
+
 extern void initialise_monitor_handles(void);
 
 // *****************************************************************************
 int main(void)
 {
+    // Used for semihosting debug output
 	initialise_monitor_handles();
 
-    int count = 0;
-
+    // Set up the LED GPIO
     setup_led(&gpio_led);
 
+    // Set up I2C and scan for devices
     setup_i2c(i2c_addr_list);
 
     uint8_t i2c_addr_list[6] = {0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11};
 
+    // Set up the magnetic sensor drivers
     setup_magnetic_sensors(magnetic_sensors, i2c_addr_list, 6);
 
-    while (1) {
+    while (1)
+    {
         // Set the LED pin high
         MXC_GPIO_OutSet(GPIO_PORT, LED_PIN);
-        MXC_Delay(500000);
+
+        // take a reading from 0x10
+        float x, y, z;
+        read_magnetic_sensor(&magnetic_sensors[4], &x, &y, &z);
+        printf("Magnetic Sensor 5 (0x10) Readings: X = %.2f uT, Y = %.2f uT, Z = %.2f uT\r\n", \
+            (double)x, (double)y, (double)z);
+        
+        // Small delay to make the LED blink visible and to avoid overwhelming the I2C bus with readings
+        MXC_Delay(MXC_DELAY_MSEC(200));
+
         // Set the LED pin low
         MXC_GPIO_OutClr(GPIO_PORT, LED_PIN);
-        MXC_Delay(500000);
-        printf("count = %d\r\n", count++);
+        MXC_Delay(MXC_DELAY_MSEC(200));
     }
 }
 
@@ -189,59 +212,46 @@ int setup_magnetic_sensors(mlx90393_t *sensors, uint8_t *i2c_addr_list, int num_
 
         printf("Initialized magnetic sensor %d with I2C address: 0x%02X\r\n", i+1, sensors[i].i2c_addr);
 
-        // Small delay after initialization before trying to read the configuration
+        // Small delay after initialization
         MXC_Delay(MXC_DELAY_MSEC(100));
-
-        // get the current configuration of the sensor and print it
-        mlx90393_config_t config;
-        error = mlx90393_get_config(&sensors[i], &config);
-        if (error != E_NO_ERROR)        {
-            printf("Failed to get configuration for sensor at I2C address: 0x%02X\r\n", i2c_addr_list[i]);
-            printf("Error code: %d\r\n", error);
-            return error; // Return the error code if getting configuration fails
-        }
-
-        MXC_Delay(MXC_DELAY_MSEC(100));
-
-        printf("Current configuration for sensor at I2C address: 0x%02X\r\n", i2c_addr_list[i]);
-        printf("z_series     = %04x\n", config.z_series);
-        printf("gain         = %04x\n", config.gain);
-        printf("hallconf     = %04x\n", config.hallconf);
-        printf("bist         = %04x\n", config.bist);
-        printf("trig_int_sel = %04x\n", config.trig_int);
-        printf("comm_mode    = %04x\n", config.comm_mode);
-        printf("woc_diff     = %04x\n", config.woc_diff);
-        printf("ext_trig     = %04x\n", config.ext_trig);
-        printf("tcmp_en      = %04x\n", config.tcmp_en);
-        printf("burst_sel    = %04x\n", config.burst_sel);
-        printf("burst_data_rate = %04x\n", config.burst_data_rate);
-        printf("osr2         = %04x\n", config.osr2);
-        printf("res_x        = %04x\n", config.res_x);
-        printf("res_y        = %04x\n", config.res_y);
-        printf("res_z        = %04x\n", config.res_z);
-        printf("dig_filt      = %04x\n", config.dig_filt);
-        printf("osr           = %04x\n", config.osr);
-        printf("sens_tc_ht     = %04x\n", config.sens_tc_ht);
-        printf("sens_tc_lt     = %04x\n", config.sens_tc_lt);
-        printf("offset_x       = %04x\n", config.offset_x);
-        printf("offset_y       = %04x\n", config.offset_y);
-        printf("offset_z       = %04x\n", config.offset_z);
-        printf("woxy_threshold = %04x\n", config.woxy_threshold);
-        printf("woz_threshold  = %04x\n", config.woz_threshold);
-
-        // Take a quick reading of the sensor to make sure it is working
-        mlx90393_measurement_t mesur;
-        float x, y, z = 0.0f;
-
-        mlx90393_start_single_measurement(&sensors[i], 0x07, &mesur.status);
-        MXC_Delay(MXC_DELAY_MSEC(100));
-        mlx90393_read_measurement_raw(&sensors[i], 0x07, &mesur);
-        mlx90393_convert_raw_to_uT(&config, &mesur, &x, &y, &z);
-        printf("Initial measurement for sensor at I2C address: 0x%02X\r\n", i2c_addr_list[i]);
-        printf("x = %f uT, y = %f uT, z = %f uT\r\n", (double)x, (double)y, (double)z);
 
     }
 
     return 0; // Return 0 to indicate success
 }
 
+int read_magnetic_sensor(mlx90393_t *sensor, float *x, float *y, float *z)
+{
+    int error = 0;
+
+    // Get the current configuration of the sensor to use for conversion
+    mlx90393_config_t config;
+    error = mlx90393_get_config(sensor, &config);
+    if (error != E_NO_ERROR) {
+        return error;
+    }
+
+    // Take a single measurement
+    mlx90393_measurement_t measurement;
+    error = mlx90393_start_single_measurement(sensor, 0x0F, &measurement.status);
+    if (error != E_NO_ERROR) {
+        return error;
+    }
+
+    // Wait for the measurement to be ready (this is a simple delay, in a real application you might want to check the status byte instead)
+    MXC_Delay(MXC_DELAY_MSEC(100));
+
+    // Read the raw measurement data
+    error = mlx90393_read_measurement_raw(sensor, 0x0F, &measurement);
+    if (error != E_NO_ERROR) {
+        return error;
+    }
+
+    // Convert the raw measurement data to microteslas
+    error = mlx90393_convert_raw_to_uT(&config, &measurement, x, y, z);
+    if (error != E_NO_ERROR) {
+        return error;
+    }
+
+    return 0; // Return 0 to indicate success
+}

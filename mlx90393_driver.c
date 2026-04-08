@@ -34,34 +34,21 @@
 /***** Globals *****/
 /* Lookup tables
  * Index order:
- * [hallconf index][gain][resolution][axis type]
- * hallconf index 0 = HALLCONF 0xC
- * hallconf index 1 = HALLCONF 0x0
+ * [gain][resolution][axis type]
  * axis type index 0 = XY
  * axis type index 1 = Z
 */
-const float mlx90393_lsb_lookup[2][8][4][2] =
+const float mlx90393_lsb_lookup[8][4][2] =
 {
-    {
-        {{0.751f, 1.210f}, {1.502f, 2.420f}, {3.004f, 4.840f}, {6.009f, 9.680f}},
-        {{0.601f, 0.968f}, {1.202f, 1.936f}, {2.403f, 3.872f}, {4.840f, 7.744f}},
-        {{0.451f, 0.726f}, {0.901f, 1.452f}, {1.803f, 2.904f}, {3.605f, 5.808f}},
-        {{0.376f, 0.605f}, {0.751f, 1.210f}, {1.502f, 2.420f}, {3.004f, 4.840f}},
-        {{0.300f, 0.484f}, {0.601f, 0.968f}, {1.202f, 1.936f}, {2.403f, 3.872f}},
-        {{0.250f, 0.403f}, {0.501f, 0.807f}, {1.001f, 1.613f}, {2.003f, 3.227f}},
-        {{0.200f, 0.323f}, {0.401f, 0.645f}, {0.801f, 1.291f}, {1.602f, 2.581f}},
-        {{0.150f, 0.242f}, {0.300f, 0.484f}, {0.601f, 0.968f}, {1.202f, 1.936f}}
-    },
-    {
-        {{0.787f, 1.267f}, {1.573f, 2.534f}, {3.146f, 5.068f}, {6.292f, 10.137f}},
-        {{0.629f, 1.014f}, {1.258f, 2.027f}, {2.517f, 4.055f}, {5.034f, 8.109f}},
-        {{0.472f, 0.760f}, {0.944f, 1.521f}, {1.888f, 3.041f}, {3.775f, 6.082f}},
-        {{0.393f, 0.634f}, {0.787f, 1.267f}, {1.573f, 2.534f}, {3.146f, 5.068f}},
-        {{0.315f, 0.507f}, {0.629f, 1.014f}, {1.258f, 2.027f}, {2.517f, 4.055f}},
-        {{0.262f, 0.422f}, {0.524f, 0.845f}, {1.049f, 1.689f}, {2.097f, 3.379f}},
-        {{0.210f, 0.338f}, {0.419f, 0.676f}, {0.839f, 1.352f}, {1.678f, 2.703f}},
-        {{0.157f, 0.253f}, {0.315f, 0.507f}, {0.629f, 1.014f}, {1.258f, 2.027f}}
-    }
+    //   RES 16,            RES 17,            RES 18,             RES 19
+    {{0.805f, 1.468f}, {1.610f, 2.936f}, {3.220f, 5.872f}, {6.440f, 11.744f}}, // Gain 0
+    {{0.644f, 1.174f}, {1.288f, 2.349f}, {2.576f, 4.698f}, {5.152f,  9.395f}}, // Gain 1
+    {{0.483f, 0.881f}, {0.966f, 1.762f}, {1.932f, 3.523f}, {3.864f,  7.046f}}, // Gain 2
+    {{0.403f, 0.734f}, {0.805f, 1.468f}, {1.610f, 2.936f}, {3.220f,  5.872f}}, // Gain 3
+    {{0.322f, 0.587f}, {0.644f, 1.174f}, {1.288f, 2.349f}, {2.576f,  4.698f}}, // Gain 4
+    {{0.268f, 0.489f}, {0.537f, 0.979f}, {1.073f, 1.957f}, {2.147f,  3.915f}}, // Gain 5
+    {{0.215f, 0.391f}, {0.429f, 0.783f}, {0.859f, 1.566f}, {1.717f,  3.132f}}, // Gain 6
+    {{0.161f, 0.294f}, {0.322f, 0.587f}, {0.644f, 1.174f}, {1.288f,  2.349f}}  // Gain 7
 };
 
 
@@ -364,7 +351,6 @@ int mlx90393_convert_raw_to_uT(const mlx90393_config_t *config,
                                const mlx90393_measurement_t *measurement,
                                float *x_uT, float *y_uT, float *z_uT)
 {
-    uint8_t hallconf_index = 0;
     int16_t x_adjusted = 0;
     int16_t y_adjusted = 0;
     int16_t z_adjusted = 0;
@@ -377,21 +363,22 @@ int mlx90393_convert_raw_to_uT(const mlx90393_config_t *config,
         return MLX90393_ERROR_UNSUPPORTED_CONFIG;
     }
 
-    if (config->hallconf == 0x0C) {
-        hallconf_index = 0;
-    } else if (config->hallconf == 0x00) {
-        hallconf_index = 1;
-    } else {
-        return MLX90393_ERROR_UNSUPPORTED_CONFIG;
-    }
+    // uint8_t hallconf_index = 0;
+    // if (config->hallconf == 0x0C) {
+    //     hallconf_index = 0;
+    // } else if (config->hallconf == 0x00) {
+    //     hallconf_index = 1;
+    // } else {
+    //     return MLX90393_ERROR_UNSUPPORTED_CONFIG;
+    // }
 
     x_adjusted = mlx90393_adjust_signed_output(measurement->x, (mlx90393_resolution_t)config->res_x);
     y_adjusted = mlx90393_adjust_signed_output(measurement->y, (mlx90393_resolution_t)config->res_y);
     z_adjusted = mlx90393_adjust_signed_output(measurement->z, (mlx90393_resolution_t)config->res_z);
 
-    *x_uT = ((float)x_adjusted) * mlx90393_lsb_lookup[hallconf_index][config->gain][config->res_x][0];
-    *y_uT = ((float)y_adjusted) * mlx90393_lsb_lookup[hallconf_index][config->gain][config->res_y][0];
-    *z_uT = ((float)z_adjusted) * mlx90393_lsb_lookup[hallconf_index][config->gain][config->res_z][1];
+    *x_uT = ((float)x_adjusted) * mlx90393_lsb_lookup[config->gain][config->res_x][0];
+    *y_uT = ((float)y_adjusted) * mlx90393_lsb_lookup[config->gain][config->res_y][0];
+    *z_uT = ((float)z_adjusted) * mlx90393_lsb_lookup[config->gain][config->res_z][1];
 
     return E_NO_ERROR;
 }
