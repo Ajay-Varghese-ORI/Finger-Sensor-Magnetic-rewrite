@@ -466,6 +466,16 @@ int mlx90393_convert_raw_to_uT(const mlx90393_config_t *config,
                                float *x_uT, float *y_uT, float *z_uT);
 
 /**
+* @brief Converts a raw temperature reading to degrees Celsius
+* 
+* @param t_raw Raw temperature reading from the sensor (int16_t)
+* @param temp  Pointer to a float where the converted temperature in degrees Celsius will be stored (float *)
+* @param magic_offset The thermal offset value found in register 0x24 of the device's non-volatile memory (uint16_t)
+* @return int 0 if successful, error code otherwise
+*/
+int mlx90393_temp_raw_to_celsius(int16_t t_raw, float *temp, u_int16_t magic_offset);
+
+/**
  * @brief   Reads back every user-accessible configuration field into a snapshot structure.
  * @param   dev Pointer to the driver handle. (mlx90393_t *)
  * @param   config Pointer to the returned configuration structure. (mlx90393_config_t *)

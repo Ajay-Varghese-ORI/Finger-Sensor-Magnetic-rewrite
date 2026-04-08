@@ -364,15 +364,6 @@ int mlx90393_convert_raw_to_uT(const mlx90393_config_t *config,
         return MLX90393_ERROR_UNSUPPORTED_CONFIG;
     }
 
-    // uint8_t hallconf_index = 0;
-    // if (config->hallconf == 0x0C) {
-    //     hallconf_index = 0;
-    // } else if (config->hallconf == 0x00) {
-    //     hallconf_index = 1;
-    // } else {
-    //     return MLX90393_ERROR_UNSUPPORTED_CONFIG;
-    // }
-
     x_adjusted = mlx90393_adjust_signed_output(measurement->x, (mlx90393_resolution_t)config->res_x);
     y_adjusted = mlx90393_adjust_signed_output(measurement->y, (mlx90393_resolution_t)config->res_y);
     z_adjusted = mlx90393_adjust_signed_output(measurement->z, (mlx90393_resolution_t)config->res_z);
@@ -380,6 +371,19 @@ int mlx90393_convert_raw_to_uT(const mlx90393_config_t *config,
     *x_uT = ((float)x_adjusted) * mlx90393_lsb_lookup[config->gain][config->res_x][0];
     *y_uT = ((float)y_adjusted) * mlx90393_lsb_lookup[config->gain][config->res_y][0];
     *z_uT = ((float)z_adjusted) * mlx90393_lsb_lookup[config->gain][config->res_z][1];
+
+    return E_NO_ERROR;
+}
+
+// *****************************************************************************
+int mlx90393_temp_raw_to_celsius(int16_t t_raw, float *temp, u_int16_t magic_offset)
+{
+    if (temp == NULL) {
+        return MLX90393_ERROR_NULL_PTR;
+    }
+
+    // The temperature 45.2 LSB/degC
+    *temp = 35.0f + (((int32_t)(uint16_t)t_raw) - magic_offset) / 45.2f;
 
     return E_NO_ERROR;
 }

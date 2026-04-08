@@ -79,9 +79,10 @@ int setup_magnetic_sensors(mlx90393_t *sensors, uint8_t *i2c_addr_list, int num_
  * @param   x Pointer to store the x-axis reading in microteslas. (float *)
  * @param   y Pointer to store the y-axis reading in microteslas. (float *)
  * @param   z Pointer to store the z-axis reading in microteslas. (float *)
+ * @param   temp Pointer to store the temperature reading in degrees Celsius. (float *)
  * @return  int 0 if successful, error code otherwise
 */
-int read_magnetic_sensor(mlx90393_t *sensor, float *x, float *y, float *z);
+int read_magnetic_sensor(mlx90393_t *sensor, float *x, float *y, float *z, float *temp);
 
 
 extern void initialise_monitor_handles(void);
@@ -103,23 +104,32 @@ int main(void)
     // Set up the magnetic sensor drivers
     setup_magnetic_sensors(magnetic_sensors, i2c_addr_list, 6);
 
+    // Place to store the magnetic sensor readings in microteslas
+    float x, y, z, temp;
+    int error = 0;
+
     while (1)
     {
-        // Set the LED pin high
-        MXC_GPIO_OutSet(GPIO_PORT, LED_PIN);
+        // // Set the LED pin high
+        // MXC_GPIO_OutSet(GPIO_PORT, LED_PIN);
 
         // take a reading from 0x10
-        float x, y, z;
-        read_magnetic_sensor(&magnetic_sensors[4], &x, &y, &z);
+        error = read_magnetic_sensor(&magnetic_sensors[4], &x, &y, &z, &temp);
+        if (error != E_NO_ERROR) {
+            printf("Error reading magnetic sensor at I2C address: 0x%02X\r\n", magnetic_sensors[4].i2c_addr);
+            continue; // Skip the rest of the loop and try again
+        }
+
         printf("Magnetic Sensor 5 (0x10) Readings: X = %.2f uT, Y = %.2f uT, Z = %.2f uT\r\n", \
             (double)x, (double)y, (double)z);
-        
-        // Small delay to make the LED blink visible and to avoid overwhelming the I2C bus with readings
-        MXC_Delay(MXC_DELAY_MSEC(200));
+        printf("Temperature: %.2f °C\r\n", (double)temp);
 
-        // Set the LED pin low
-        MXC_GPIO_OutClr(GPIO_PORT, LED_PIN);
-        MXC_Delay(MXC_DELAY_MSEC(200));
+        // delay between readings
+        MXC_Delay(MXC_DELAY_MSEC(50));
+
+        // // Set the LED pin low
+        // MXC_GPIO_OutClr(GPIO_PORT, LED_PIN);
+        // MXC_Delay(MXC_DELAY_MSEC(200));
     }
 }
 
@@ -220,7 +230,7 @@ int setup_magnetic_sensors(mlx90393_t *sensors, uint8_t *i2c_addr_list, int num_
     return 0; // Return 0 to indicate success
 }
 
-int read_magnetic_sensor(mlx90393_t *sensor, float *x, float *y, float *z)
+int read_magnetic_sensor(mlx90393_t *sensor, float *x, float *y, float *z, float *temp)
 {
     int error = 0;
 
@@ -231,24 +241,43 @@ int read_magnetic_sensor(mlx90393_t *sensor, float *x, float *y, float *z)
         return error;
     }
 
+    // delay to not overwhelm the sensor with back-to-back commands
+    MXC_Delay(MXC_DELAY_MSEC(30));
+
     // Take a single measurement
     mlx90393_measurement_t measurement;
-    error = mlx90393_start_single_measurement(sensor, 0x0F, &measurement.status);
+    error = mlx90393_start_single_measurement(sensor, MLX90393_CHANNEL_ALL, &measurement.status);
     if (error != E_NO_ERROR) {
         return error;
     }
 
-    // Wait for the measurement to be ready (this is a simple delay, in a real application you might want to check the status byte instead)
-    MXC_Delay(MXC_DELAY_MSEC(100));
+    // Wait for the measurement to be ready
+    MXC_Delay(MXC_DELAY_MSEC(30));
 
     // Read the raw measurement data
-    error = mlx90393_read_measurement_raw(sensor, 0x0F, &measurement);
+    error = mlx90393_read_measurement_raw(sensor, MLX90393_CHANNEL_ALL, &measurement);
     if (error != E_NO_ERROR) {
         return error;
     }
 
     // Convert the raw measurement data to microteslas
     error = mlx90393_convert_raw_to_uT(&config, &measurement, x, y, z);
+    if (error != E_NO_ERROR) {
+        return error;
+    }
+
+    // delay to not overwhelm the sensor with back-to-back commands (100 ms)
+    MXC_Delay(MXC_DELAY_MSEC(30));
+
+    // grab the magic offset from register 0x24 for temperature conversion
+    uint16_t magic_offset;
+    error = mlx90393_read_register(sensor, 0x24, &magic_offset, NULL);
+    if (error != E_NO_ERROR) {
+        return error;
+    }
+
+    // Convert the raw temperature reading to degrees Celsius
+    error = mlx90393_temp_raw_to_celsius(measurement.t, temp, magic_offset);
     if (error != E_NO_ERROR) {
         return error;
     }
