@@ -107,6 +107,7 @@ int main(void)
     // Place to store the magnetic sensor readings in microteslas
     float x, y, z, temp;
     int error = 0;
+    float total = 0.0;
 
     while (1)
     {
@@ -114,18 +115,24 @@ int main(void)
         // MXC_GPIO_OutSet(GPIO_PORT, LED_PIN);
 
         // take a reading from 0x10
-        error = read_magnetic_sensor(&magnetic_sensors[4], &x, &y, &z, &temp);
+        error = read_magnetic_sensor(&magnetic_sensors[5], &x, &y, &z, &temp);
         if (error != E_NO_ERROR) {
-            printf("Error reading magnetic sensor at I2C address: 0x%02X\r\n", magnetic_sensors[4].i2c_addr);
+            printf("Error reading magnetic sensor at I2C address: 0x%02X\r\n", magnetic_sensors[5].i2c_addr);
             continue; // Skip the rest of the loop and try again
         }
 
+        /*
         printf("Magnetic Sensor 5 (0x10) Readings: X = %.2f uT, Y = %.2f uT, Z = %.2f uT\r\n", \
             (double)x, (double)y, (double)z);
         printf("Temperature: %.2f °C\r\n", (double)temp);
+        */
+
+        // Get the magnitude of the magnetic field
+        total = sqrt(x * x + y * y );
+        printf("Magnetic Field Magnitude: %.2f uT\r\n", (double)total);
 
         // delay between readings
-        MXC_Delay(MXC_DELAY_MSEC(50));
+        MXC_Delay(MXC_DELAY_MSEC(10));
 
         // // Set the LED pin low
         // MXC_GPIO_OutClr(GPIO_PORT, LED_PIN);
@@ -252,7 +259,7 @@ int read_magnetic_sensor(mlx90393_t *sensor, float *x, float *y, float *z, float
     }
 
     // Wait for the measurement to be ready
-    MXC_Delay(MXC_DELAY_MSEC(30));
+    MXC_Delay(MXC_DELAY_MSEC(100));
 
     // Read the raw measurement data
     error = mlx90393_read_measurement_raw(sensor, MLX90393_CHANNEL_ALL, &measurement);
